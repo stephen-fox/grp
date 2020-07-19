@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 )
 
+// NewParallelFuncPool creates a new ParallelFuncPool.
 func NewParallelFuncPool(numWorkers int) (*ParallelFuncPool, error) {
 	if numWorkers < 1 {
 		return nil, fmt.Errorf("number of workers cannot be less than 1")
@@ -19,8 +20,10 @@ func NewParallelFuncPool(numWorkers int) (*ParallelFuncPool, error) {
 	}, nil
 }
 
-// It is possible for a job to run even when the pool is considered dead.
-// This is because
+// ParallelFuncPool parallelizes a single task into smaller subtasks by
+// queueing functions in goroutines which wait until the number of active
+// workers decreases. If a single subtask fails, then Wait() returns
+// a non-nil error, and any queued work is cancelled.
 type ParallelFuncPool struct {
 	pool   chan struct{}
 	failed chan error
@@ -29,6 +32,9 @@ type ParallelFuncPool struct {
 	wg     *sync.WaitGroup
 }
 
+// QueueFunction queues a function for execution at some point in the future.
+//
+// This method is asynchronous.
 func (o *ParallelFuncPool) QueueFunction(fn func() error) {
 	o.wg.Add(1)
 	go func() {
@@ -58,7 +64,10 @@ func (o *ParallelFuncPool) QueueFunction(fn func() error) {
 	}()
 }
 
-// Wait waits until the queued jobs complete.
+// Wait waits until either all of the queued subtasks complete, or a single
+// subtask fails.
+//
+// This should only be called after queuing all possible subtasks.
 func (o *ParallelFuncPool) Wait() error {
 	o.wg.Wait()
 	select {
